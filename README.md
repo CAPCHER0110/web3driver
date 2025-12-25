@@ -221,6 +221,15 @@ console.log(signature);
 
 **Result**: You will get an IPFS URL. Verify it in your browser.
 
+### Step 5: List User Files
+
+**Request:** `GET /api/files`
+
+* **Header**: `Authorization: Bearer <Your_Token>`
+
+**Response**: Returns a JSON list of all files uploaded by the current user (fetched from MySQL).
+
+
 ---
 
 ## 🔮 Roadmap

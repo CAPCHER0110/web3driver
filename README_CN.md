@@ -221,6 +221,14 @@ console.log(signature);
 
 **结果**: 你将获得一个 IPFS 链接，可在浏览器中直接访问验证。
 
+### 第五步: 获取文件列表 (List Files)
+
+**请求:** `GET /api/files`
+
+* **Header**: `Authorization: Bearer <你的Token>`
+
+**响应**: 返回包含你所有上传文件元数据的 JSON 列表（从 MySQL 读取）。
+
 ---
 
 ## 🔮 未来规划
