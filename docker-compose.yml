@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  # MySQL 数据库服务
+  db:
+    image: mysql:8.0
+    container_name: web3_mysql
+    restart: always
+    # 从 .env 文件读取环境变量（可选，这里为了演示清晰直接写明映射）
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: web3_demo
+      MYSQL_USER: web3_user
+      MYSQL_PASSWORD: web3_password
+    ports:
+      - "3306:3306"
+    volumes:
+      # 数据持久化：将容器内的数据库文件映射到本地 mysql_data 目录
+      # 这样即使删除容器，数据也不会丢失
+      - ./mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+
+  # 可选：phpMyAdmin (网页版数据库管理工具)
+  # 启动后访问 http://localhost:8081 即可查看数据
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: web3_phpmyadmin
+    links:
+      - db
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+    ports:
+      - "8081:80"

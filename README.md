@@ -1,17 +1,17 @@
+```markdown
+# Web3Driver: Decentralized Web3 Cloud Storage
+
+[🇨🇳 中文文档 (Chinese Version)](./README_CN.md)
+
+**Web3Driver** is a backend service that bridges Web2 high-performance concurrency with Web3 decentralized storage. It implements a comprehensive "Off-chain Computation, On-chain Identity, Distributed Storage" hybrid architecture.
+
+This project aims to solve data ownership issues inherent in traditional centralized cloud storage while avoiding the prohibitive costs and low throughput of full on-chain storage.
 
 ---
 
-# Web3Drive: Decentralized Web3 Cloud Storage
+## 🏗 System Architecture
 
-**Web3Drive** 是一个融合了 Web2 高性能并发与 Web3 去中心化存储特性的云存储后端服务。它实现了一套完整的“链下计算、链上身份、分布式存储”的混合架构方案。
-
-本项目旨在解决传统中心化网盘的数据所有权问题，同时规避纯链上存储的高昂成本与低吞吐量瓶颈。
-
----
-
-## 🏗 System Architecture (架构设计)
-
-本项目采用了 **Hybrid Storage Strategy (混合存储策略)**，这是在当前区块链基础设施成本下的最优工程解。
+We adopted a **Hybrid Storage Strategy**, which represents the optimal engineering solution given current blockchain infrastructure costs.
 
 ```mermaid
 graph TD
@@ -30,44 +30,98 @@ graph TD
 
 ```
 
-### 💡 Architectural Trade-offs (架构权衡)
+### 💡 Architectural Trade-offs
 
-在设计存储层时，我们面临以下选择与权衡：
+During the design phase, we evaluated several approaches:
 
-1. **Full On-Chain (完全上链)**: 将文件二进制数据写入以太坊 Calldata。
-* *缺陷*: 成本极高（当前 Gas 价格下，存储 1KB 数据可能花费数美元），且不仅阻塞网络，扩容性（Scalability）也极差。
-
-
-2. **Centralized S3 (传统云存储)**: 使用 AWS S3 或 OSS。
-* *缺陷*: 违背了 Web3 的抗审查（Censorship Resistance）和数据主权原则，中心化服务商可随时删除用户数据。
+1. **Full On-Chain Storage**: Writing binary data to Ethereum Calldata.
+* *Verdict*: Rejected. Storing 1KB costs several dollars. It also bloats the state and lacks scalability.
 
 
-3. **Hybrid Approach (本方案)**:
-* **Identity**: 使用以太坊地址作为唯一标识（DID），通过非对称加密签名验证身份。
-* **Storage**: 使用 IPFS (InterPlanetary File System) 存储文件实体，确保内容寻址和去中心化。
-* **Indexing**: 使用 MySQL 存储元数据（文件名、大小、CID、Owner），确保毫秒级的检索速度。
+2. **Centralized S3 (AWS/OSS)**:
+* *Verdict*: Rejected. It violates Web3 principles of censorship resistance and data sovereignty.
+
+
+3. **Hybrid Approach (Chosen)**:
+* **Identity**: Ethereum Address as DID (Decentralized Identifier).
+* **Storage**: **IPFS** for immutable content addressing and decentralization.
+* **Indexing**: **MySQL** for metadata (Filename, Size, Owner), ensuring milliseconds latency for list operations.
 
 
 
-**结论**: 这种“Web2.5”架构实现了成本效率（Cost-Efficiency）与去中心化理念的平衡。
+**Conclusion**: This "Web2.5" architecture balances **Cost-Efficiency** with **Decentralization**.
 
 ---
 
-## 🛡 Security Design (安全性设计)
+## 🛡 Security Design
 
-### 1. Nonce-based Replay Protection (防重放攻击)
+### 1. Nonce-based Replay Protection
 
-为了防止中间人截获用户的签名并重复使用，我们实现了严格的 **Nonce 机制**：
+To prevent replay attacks where a valid signature is intercepted and reused:
 
-* 用户请求登录前，必须先从服务器获取一个随机生成的 `Nonce`。
-* 该 `Nonce` 绑定到用户地址，且存入数据库。
-* **One-time Use (一次一密)**: 一旦签名验证完成（无论成功失败），该 Nonce 立即销毁。下一次登录必须请求新的 Challenge。
+* Users must request a random `Nonce` from the server before logging in.
+* The Nonce is bound to the user's address in the database.
+* **One-time Use**: The Nonce is invalidated immediately after a verification attempt, regardless of the outcome.
 
-### 2. Stateless Authentication (无状态鉴权)
+### 2. Stateless Authentication
 
-* 遵循 **SIWE (Sign-In with Ethereum)** 流程标准（参考 EIP-4361）。
-* 后端不存储 Session，而是颁发 **JWT (JSON Web Token)**。
-* JWT 包含用户钱包地址，由服务器私钥签名，确保水平扩展性（Horizontal Scalability）。
+* Follows the **SIWE (Sign-In with Ethereum)** workflow (inspired by EIP-4361).
+* The backend issues a **JWT (JSON Web Token)** signed with a secure server secret.
+* This allows for **Horizontal Scalability** as no session state is required in server memory.
+
+---
+
+## 💾 Data Model & Schema
+
+While we use GORM for auto-migration, the underlying schema is designed for performance and integrity. We use an **Account-Based Model**.
+
+### Entity-Relationship Diagram
+
+```mermaid
+erDiagram
+    User ||--o{ File : uploads
+    User {
+        string address PK "Ethereum Wallet Address (DID)"
+        string nonce "Random Challenge for Auth"
+    }
+    File {
+        uint id PK
+        string cid "IPFS Content Identifier"
+        string filename
+        int64 size
+        string owner_address FK "Indexed for query performance"
+    }
+    }
+
+```
+
+### SQL Definition
+
+```sql
+-- 1. Users Table: Identity Management
+CREATE TABLE `users` (
+  `address` char(42) NOT NULL COMMENT 'Ethereum Address (0x...)',
+  `nonce` varchar(255) DEFAULT NULL COMMENT 'One-time challenge string',
+  PRIMARY KEY (`address`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 2. Files Table: Metadata Indexing
+-- Binary data is NOT stored here, only the reference (CID).
+CREATE TABLE `files` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `created_at` datetime(3) DEFAULT NULL,
+  `updated_at` datetime(3) DEFAULT NULL,
+  `deleted_at` datetime(3) DEFAULT NULL,
+  `cid` longtext NOT NULL COMMENT 'IPFS Hash (e.g., Qm...)',
+  `filename` longtext,
+  `size` bigint(20) DEFAULT NULL,
+  `owner_address` char(42) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_files_owner_address` (`owner_address`), -- Index for list queries
+  KEY `idx_files_deleted_at` (`deleted_at`)        -- Soft delete support
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+```
 
 ---
 
@@ -83,23 +137,21 @@ graph TD
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/web3-drive.git
+git clone [https://github.com/CAPCHER0110/web3driver.git](https://github.com/CAPCHER0110/web3driver.git)
 cd web3-drive
 
 ```
 
 
 2. **Setup Environment Variables**
-复制配置文件模板并填写你的密钥（Pinata Key, JWT Secret 等）。
 ```bash
 cp .env.example .env
-# 编辑 .env 文件，填入你的配置
+# Edit .env and fill in your JWT_SECRET and PINATA_JWT
 
 ```
 
 
-3. **Start Infrastructure (MySQL)**
-使用 Docker 快速启动数据库。
+3. **Start Infrastructure**
 ```bash
 docker-compose up -d
 
@@ -118,30 +170,26 @@ go run main.go
 
 ---
 
-## 🧪 Testing Guidelines (全链路测试步骤)
+## 🧪 Testing Guidelines
 
-由于本项目涉及钱包签名，建议结合 Postman 和 浏览器控制台 进行联合调试。
+Since this involves wallet signatures, we recommend "Joint Debugging" using **Postman** and **Browser Console**.
 
-### Step 1: 获取挑战码 (Get Nonce)
+### Step 1: Get Nonce
 
-**Request:**
-`GET /auth/nonce?address=0xYourWalletAddress`
-
+**Request:** `GET /auth/nonce?address=0xYourWalletAddress`
 **Response:**
 
 ```json
-{
-  "nonce": "Login to D-Drive: 8a7b9c..."
-}
+{ "nonce": "Login to D-Drive: 8a7b9c..." }
 
 ```
 
-### Step 2: 钱包签名 (Sign Message)
+### Step 2: Sign Message
 
-在浏览器控制台 (F12) 模拟 MetaMask 签名：
+Open Browser Console (F12) and run:
 
 ```javascript
-// 替换为你上一步获取的 nonce
+// Replace with nonce from Step 1
 const nonce = "Login to D-Drive: 8a7b9c...";
 const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
 const signature = await ethereum.request({
@@ -152,7 +200,7 @@ console.log(signature);
 
 ```
 
-### Step 3: 登录换取 Token (Login)
+### Step 3: Login
 
 **Request:** `POST /auth/login`
 
@@ -164,25 +212,25 @@ console.log(signature);
 
 ```
 
-**Response:** 获取 `token`。
+**Response:** Copy the returned `token`.
 
-### Step 4: 上传文件 (Upload to IPFS)
+### Step 4: Upload File
 
 **Request:** `POST /api/upload`
 
 * **Header**: `Authorization: Bearer <Your_Token>`
 * **Body (form-data)**: `file=@test_image.png`
 
-**Result**: 返回 IPFS CID，并可通过网关访问：`https://gateway.pinata.cloud/ipfs/<CID>`
+**Result**: You will get an IPFS URL. Verify it in your browser.
 
 ---
 
-## 🔮 Roadmap & Future Works
+## 🔮 Roadmap
 
-* [ ] **Storage Layer Evolution**: 引入 **Filecoin** 网络作为冷存储层，提供比 IPFS 更持久的数据保障。
-* [ ] **Smart Contract Integration**: 开发 Solidity 支付合约。用户需支付 ETH/Stablecoin 订阅存储空间，合约触发后端扩容（Chainlink Oracle）。
-* [ ] **Privacy**: 实现端到端加密（E2EE）。文件在上传前在客户端进行 AES 加密，仅用户持有解密私钥。
-* [ ] **CDN Acceleration**: 针对热门资源配置 Cloudflare IPFS Gateway 加速。
+* [ ] **Storage Layer Evolution**: Introduce **Filecoin** as a cold storage layer for better persistence guarantees.
+* [ ] **Smart Contract Integration**: Implement a Solidity payment contract. Users pay ETH to expand storage quota (triggered via Chainlink Oracle).
+* [ ] **Privacy**: End-to-End Encryption (E2EE). Files are AES-encrypted client-side before upload.
+* [ ] **CDN Acceleration**: Configure Cloudflare IPFS Gateway for hot resources.
 
 ---
 
@@ -190,15 +238,16 @@ console.log(signature);
 
 ```text
 .
-├── config/             # Centralized configuration management (12-Factor App)
+├── config/             # Centralized configuration management
 ├── middleware/         # JWT Auth & Request Interceptors
 ├── models/             # GORM Data Models & Migrations
 ├── utils/              # Crypto (ECDSA) & IPFS Adapters
 ├── main.go             # Application Entry & Router
+├── docker-compose.yml  # Infrastructure as Code
 └── .env                # Environment Secrets
 
 ```
 
----
+```
 
-*Created by [zhongshoujin] - Backend Engineer transitioning to Web3.*
+---
