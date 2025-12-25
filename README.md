@@ -90,7 +90,6 @@ erDiagram
         int64 size
         string owner_address FK "Indexed for query performance"
     }
-    }
 
 ```
 
@@ -249,4 +248,4 @@ console.log(signature);
 
 ```
 
----
+```

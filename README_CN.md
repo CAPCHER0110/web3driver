@@ -90,7 +90,6 @@ erDiagram
         int64 size
         string owner_address FK "索引字段"
     }
-    }
 
 ```
 
