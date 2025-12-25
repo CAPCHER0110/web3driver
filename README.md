@@ -1,4 +1,3 @@
-```markdown
 # Web3Driver: Decentralized Web3 Cloud Storage
 
 [🇨🇳 中文文档 (Chinese Version)](./README_CN.md)

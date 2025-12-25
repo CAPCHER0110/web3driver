@@ -1,4 +1,3 @@
-```markdown
 # Web3Driver: 去中心化 Web3 云存储服务
 
 [🇺🇸 English Documentation](./README.md)
